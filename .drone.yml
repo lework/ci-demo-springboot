@@ -1,0 +1,194 @@
+global-variables:
+  - &default_docker_settings 
+    dockerfile: ./Dockerfile
+    storage_path: /drone/src/docker
+    repo: 192.168.77.133:5000/root/ci-demo-springboot
+    registry: 192.168.77.133:5000
+    mirror: https://docker.mirrors.ustc.edu.cn/
+    insecure: true
+  - &default_cache_settings
+    image: drillster/drone-volume-cache
+    settings:
+    volumes:
+      - name: cache
+        path: /cache
+    when:
+      ref:
+        include:
+          - refs/heads/feature/*
+          - refs/heads/master
+          - refs/heads/dev
+          - refs/tags/*
+      event:
+        include:
+          - push
+          - pull_request
+          - tag
+
+
+kind: pipeline
+name: ci-demo
+
+volumes:
+- name: cache
+  host:
+    path: /tmp/cache
+
+steps:
+- name: restore-cache
+  <<: *default_cache_settings
+  settings:
+    restore: true
+    mount:
+      - ./docker
+      - ./.m2
+      
+- name: unit-test
+  image: maven:3.6.1-jdk-8-slim
+  commands:
+    - mvn -Dmaven.repo.local=/drone/src/.m2/repository test
+  when:
+    branch:
+      include:
+        - feature/*
+        - master
+        - dev
+    event:
+      include:
+        - push
+        - pull_request
+
+- name: build-test
+  image: maven:3.6.1-jdk-8-slim
+  commands:
+    - mvn -Dmaven.repo.local=/drone/src/.m2/repository clean package -Ptest
+  when:
+    branch:
+      include:
+        - feature/*
+        - master
+        - dev
+    event:
+      include:
+        - push
+        - pull_request
+
+- name: build-prod
+  image: maven:3.6.1-jdk-8-slim
+  commands:
+    - mvn -Dmaven.repo.local=/drone/src/.m2/repository clean package -Pprod
+  when:
+    event: tag
+
+- name: build-feature-image
+  image: plugins/docker
+  settings:
+    <<: *default_docker_settings
+    tag:
+      - feature-${DRONE_BRANCH##feature/}
+  when:
+    branch: feature/*
+    event: push
+
+- name: build-dev-image
+  image: plugins/docker
+  settings:
+    <<: *default_docker_settings
+    tag:
+      - dev
+  when:
+    branch: dev
+    event:
+      - push
+
+- name: build-staging-image
+  image: plugins/docker
+  settings:
+    <<: *default_docker_settings
+    tag:
+      - latest
+  when:
+    branch: master
+    event:
+      - push
+
+- name: build-prod-image
+  image: plugins/docker
+  settings:
+    <<: *default_docker_settings
+    auto_tag: true
+    tag:
+      - ${DRONE_TAG}
+  when:
+    event: tag
+
+- name: change-deployment
+  image: busybox
+  commands:
+    - '[ -n "$DRONE_TAG" ] && (sed -i "s/dev/${DRONE_TAG##v}/g" deployment.yml;sed -i "s/environment: test/environment: prod/g" deployment.yml)'
+    - sed -i "s/THIS_STRING_IS_REPLACED_DURING_BUILD/$(date +'%Y-%m-%y %T')/g" deployment.yml
+    - cat deployment.yml
+  when:
+    ref:
+      include:
+        - refs/heads/dev
+        - refs/tags/*
+    event:
+      include:
+        - push
+        - tag
+
+- name: deploy-test
+  image: lework/kubectl-check
+  environment:
+    KUBERNETES_DEPLOY: ci-demo-springboot
+    KUBERNETES_KUBECONFIG:
+      from_secret: KUBERNETES_KUBECONFIG_TEST
+  when:
+    branch: dev
+    event: push
+
+- name: deploy-prod
+  image: lework/kubectl-check
+  environment:
+    KUBERNETES_DEPLOY: ci-demo-springboot
+    KUBERNETES_KUBECONFIG:
+      from_secret: KUBERNETES_KUBECONFIG_PROD
+  when:
+    event:
+      - tag
+
+- name: rebuild-cache
+  <<: *default_cache_settings
+  settings:
+    rebuild: true
+    mount:
+      - ./docker
+      - ./.m2
+      
+- name: semantic-release
+  image: lework/drone-semantic-release
+  settings:
+    git_user_name: root
+    git_user_email: root@test.com
+    git_login: root
+    git_password:
+      from_secret: GIT_PASSWORD
+  when:
+    branch: master
+    event: push
+
+- name: notify
+  image: drillster/drone-email
+  settings:
+    port: 25
+    from: root@test.com
+    host: smtp.test.com
+    username: root@test.com
+    password:
+      from_secret: EMAIL_PASSWORD
+    skip_verify: true
+    recipients: [ root@test.com ]
+    recipients_only: true
+  when:
+    status: [ success, changed, failure ]

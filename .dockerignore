@@ -1,0 +1,13 @@
+*.md
+*.sh
+*.Dockerfile
+.drone.yml
+Dockerfile
+docker
+deployment.yml
+.git/*
+.m2/*
+tmp/*
+.cache/
+!.gitkeep
+!.gitignore

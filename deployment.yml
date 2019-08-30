@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ci-demo-springboot
+  labels:
+    app: ci-demo-springboot
+    environment: test
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+  minReadySeconds: 3
+  selector:
+    matchLabels:
+      app: ci-demo-springboot
+      environment: test
+  template:
+    metadata:
+      labels:
+        app: ci-demo-springboot
+        environment: test
+    spec:
+      containers:
+      - name: ci-demo-springboot
+        image: 192.168.77.133:5000/root/ci-demo-springboot:dev
+        imagePullPolicy: Always
+        resources:
+          requests:
+            cpu: 10m
+            memory: 10Mi
+        ports:
+        - name: http
+          containerPort: 80
+          protocol: TCP
+        readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+        env:
+        - name: _PLEASE_REDEPLOY
+          value: 'THIS_STRING_IS_REPLACED_DURING_BUILD'
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ci-demo-springboot
+  namespace: default
+  labels:
+    app: ci-demo-springboot
+    environment: test
+spec:
+  selector:
+    app: ci-demo-springboot
+    environment: test
+  type: NodePort
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 80
+    nodePort: 30084
