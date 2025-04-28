@@ -1,0 +1,17 @@
+# 测试环境配置
+server:
+  port: 8080
+
+# 环境标识
+spring:
+  config:
+    activate:
+      on-profile: test
+
+# 应用信息配置
+info:
+  app:
+    name: ${spring.application.name}
+    description: Spring Boot多环境示例应用
+    version: 1.0.0
+    environment: testing

@@ -1,0 +1,35 @@
+spring:
+  application:
+    name: ci-demo-springboot
+  profiles:
+    active: dev
+  info:
+    git:
+      mode: full
+
+server:
+  servlet:
+    encoding:
+      charset: UTF-8
+      enabled: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: info,health
+  info:
+    env:
+      enabled: true
+    git:
+      enabled: true
+    build:
+      enabled: true
+  endpoint:
+    health:
+      show-details: always
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
