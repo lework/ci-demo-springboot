@@ -29,9 +29,14 @@ RUN --mount=type=cache,id=${APP}-maven-repo,target=/usr/share/maven/ref/reposito
 FROM harbor.leops.local/common/runtime/openjdk:24-debian11 AS running
 
 ARG APP_ENV=test \
-    APP=undefine
+    APP=undefine \
+    GIT_BRANCH= \
+    GIT_COMMIT_ID=
+
 ENV APP_ENV=$APP_ENV \
-    APP=$APP
+    APP=$APP \
+    GIT_BRANCH=$GIT_BRANCH \
+    GIT_COMMIT_ID=$GIT_COMMIT_ID
 
 WORKDIR /app
 
